@@ -1,0 +1,262 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Campus Navigation System</title>
+
+  <!-- Leaflet CSS -->
+  <link
+    rel="stylesheet"
+    href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+  />
+
+  <style>
+    body {
+      margin: 0;
+      font-family: "Poppins", sans-serif;
+      background-color: #f0f2f5;
+    }
+
+    header {
+      background: linear-gradient(90deg, #0078d7, #00b4d8);
+      color: white;
+      text-align: center;
+      padding: 15px;
+      font-size: 1.4rem;
+      font-weight: bold;
+      letter-spacing: 1px;
+      box-shadow: 0 2px 6px rgba(0,0,0,0.2);
+    }
+
+    #container {
+      display: flex;
+      height: calc(100vh - 60px);
+    }
+
+    /* Sidebar styling */
+    #sidebar {
+      width: 300px;
+      background-color: white;
+      border-right: 1px solid #ddd;
+      box-shadow: 2px 0 10px rgba(0,0,0,0.1);
+      display: flex;
+      flex-direction: column;
+      justify-content: space-between;
+      padding: 20px;
+    }
+
+    #roleSelect {
+      width: 100%;
+      padding: 8px;
+      font-size: 14px;
+      border: 1px solid #ccc;
+      border-radius: 6px;
+      margin-bottom: 10px;
+    }
+
+    .panel {
+      display: none;
+      flex-direction: column;
+      gap: 10px;
+    }
+
+    .panel.active {
+      display: flex;
+    }
+
+    label {
+      font-size: 14px;
+      font-weight: 600;
+    }
+
+    select, input, button {
+      padding: 8px;
+      border-radius: 5px;
+      border: 1px solid #ccc;
+      font-size: 14px;
+    }
+
+    button {
+      background-color: #0078d7;
+      color: white;
+      border: none;
+      cursor: pointer;
+      transition: background 0.3s ease;
+    }
+
+    button:hover {
+      background-color: #005fa3;
+    }
+
+    #map {
+      flex-grow: 1;
+      height: 100%;
+      width: 100%;
+    }
+
+    footer {
+      text-align: center;
+      font-size: 12px;
+      padding: 8px;
+      color: gray;
+    }
+  </style>
+</head>
+<body>
+  <header>🏫 Campus Navigation System</header>
+
+  <div id="container">
+    <div id="sidebar">
+      <div>
+        <label for="roleSelect">Select Role:</label>
+        <select id="roleSelect" onchange="switchRole()">
+          <option value="" disabled selected>Select your role</option>
+          <option value="student">Student</option>
+          <option value="admin">Admin</option>
+        </select>
+
+        <!-- Student Panel -->
+        <div id="studentPanel" class="panel">
+          <label>Start:</label>
+          <select id="startSelect"></select>
+
+          <label>Destination:</label>
+          <select id="endSelect"></select>
+
+          <button onclick="showPath()">Show Path</button>
+          <button onclick="resetMap()">Reset</button>
+        </div>
+
+        <!-- Admin Panel -->
+        <div id="adminPanel" class="panel">
+          <label>New Location Name:</label>
+          <input type="text" id="newName" placeholder="e.g. Civil Dept" />
+
+          <label>Latitude:</label>
+          <input type="number" step="any" id="newLat" placeholder="e.g. 12.8245" />
+
+          <label>Longitude:</label>
+          <input type="number" step="any" id="newLng" placeholder="e.g. 80.0455" />
+
+          <button onclick="addNewLocation()">Add Location</button>
+        </div>
+      </div>
+
+      <footer>© 2025 Campus Navigation Project</footer>
+    </div>
+
+    <div id="map"></div>
+  </div>
+
+  <!-- Leaflet JS -->
+  <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+
+  <script>
+    // Initialize map
+    const map = L.map("map").setView([12.823, 80.045], 17);
+    L.tileLayer("https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png", {
+      attribution: "&copy; OpenStreetMap contributors",
+    }).addTo(map);
+
+    // Locations
+    let locations = {
+      "Main Gate": [12.8230, 80.0439],
+      "Admin Block": [12.8237, 80.0450],
+      "CSE Dept": [12.8244, 80.0460],
+      "Library": [12.8251, 80.0455],
+      "Hostel": [12.8260, 80.0472],
+    };
+
+    // Populate dropdowns
+    const startSelect = document.getElementById("startSelect");
+    const endSelect = document.getElementById("endSelect");
+    function populateDropdowns() {
+      startSelect.innerHTML = "";
+      endSelect.innerHTML = "";
+      for (const name in locations) {
+        startSelect.add(new Option(name, name));
+        endSelect.add(new Option(name, name));
+      }
+    }
+    populateDropdowns();
+
+    // Add markers
+    let markers = [];
+    function loadMarkers() {
+      markers.forEach((m) => map.removeLayer(m));
+      markers = [];
+      for (const name in locations) {
+        const marker = L.marker(locations[name]).addTo(map);
+        marker.bindPopup(`<b>${name}</b>`);
+        markers.push(marker);
+      }
+    }
+    loadMarkers();
+
+    // Draw path
+    let routeLine = null;
+    function showPath() {
+      const start = startSelect.value;
+      const end = endSelect.value;
+
+      if (!start || !end) {
+        alert("Please select both start and destination.");
+        return;
+      }
+      if (start === end) {
+        alert("Start and destination cannot be the same.");
+        return;
+      }
+
+      const coords1 = locations[start];
+      const coords2 = locations[end];
+
+      if (routeLine) map.removeLayer(routeLine);
+      routeLine = L.polyline([coords1, coords2], {
+        color: "blue",
+        weight: 5,
+        opacity: 0.7,
+      }).addTo(map);
+
+      map.fitBounds(routeLine.getBounds());
+      routeLine.bindPopup(`<b>Path from ${start} to ${end}</b>`).openPopup();
+    }
+
+    function resetMap() {
+      if (routeLine) map.removeLayer(routeLine);
+      routeLine = null;
+      map.setView([12.823, 80.045], 17);
+    }
+
+    // Switch Role
+    function switchRole() {
+      const role = document.getElementById("roleSelect").value;
+      document.getElementById("studentPanel").classList.toggle("active", role === "student");
+      document.getElementById("adminPanel").classList.toggle("active", role === "admin");
+    }
+
+    // Add New Location
+    function addNewLocation() {
+      const name = document.getElementById("newName").value.trim();
+      const lat = parseFloat(document.getElementById("newLat").value);
+      const lng = parseFloat(document.getElementById("newLng").value);
+
+      if (!name || isNaN(lat) || isNaN(lng)) {
+        alert("Please fill all fields correctly.");
+        return;
+      }
+
+      locations[name] = [lat, lng];
+      populateDropdowns();
+      loadMarkers();
+      alert(`✅ ${name} added successfully!`);
+      resetMap();
+
+      document.getElementById("newName").value = "";
+      document.getElementById("newLat").value = "";
+      document.getElementById("newLng").value = "";
+    }
+  </script>
+</body>
+</html>
